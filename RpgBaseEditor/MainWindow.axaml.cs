@@ -1,6 +1,7 @@
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Markup.Xaml;
+using Avalonia.Media;
 using System.Collections.Generic;
 
 namespace RpgBaseEditor
@@ -15,7 +16,7 @@ namespace RpgBaseEditor
 
         public void UpdateComponent()
         {
-            AvaloniaXamlLoader.Load(this);
+            AvaloniaXamlLoader.Load(this);      
         }
     }
 
@@ -31,7 +32,7 @@ namespace RpgBaseEditor
 
         public void MenuNewCampaign()
         {
-            TabItems.Add(new TabItemModel("new_campaing", "teste", this));
+            TabItems.Add(new TabItemModel("campaign"+TabItems.Count, new CampaignEditor(), this));
             _window.UpdateComponent();
         }
 
@@ -40,14 +41,19 @@ namespace RpgBaseEditor
             TabItems.Remove(tabItem);
             _window.UpdateComponent();
         }
+
+        public void CloseApp()
+        {
+            _window.Close();
+        }
     }
 
     public class TabItemModel
     {
         private MainWindowDataContext _dataContext { get; }
         public string Header { get; }
-        public string Content { get; }
-        public TabItemModel(string header, string content, MainWindowDataContext dataContext)
+        public ContentControl Content { get; }
+        public TabItemModel(string header, ContentControl content, MainWindowDataContext dataContext)
         {
             _dataContext = dataContext;
             Header = header;

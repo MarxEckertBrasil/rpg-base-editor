@@ -6,7 +6,7 @@
         x:Class="RpgBaseEditor.MainWindow"
         Title="RpgBaseEditor"
         ExtendClientAreaToDecorationsHint="True">
-
+        
   <DockPanel>
     <Menu DockPanel.Dock="Top">
       <MenuItem Header="_File">
@@ -14,7 +14,7 @@
         <MenuItem Header="New Campaign" Command="{Binding MenuNewCampaign}"/>
         <!--<MenuItem Header="New RPG System"/>-->
         <Separator/>
-        <MenuItem Header="_Exit"/>
+        <MenuItem Header="_Exit" Command="{Binding CloseApp}"/>
       </MenuItem>
     </Menu>
     
@@ -23,15 +23,13 @@
         <DataTemplate>
           <DockPanel>
             <TextBlock Text="{Binding Header}" />
-            <Button Command="{Binding RemoveTab}">X</Button>
+            <Button Command="{Binding RemoveTab}">x</Button>
           </DockPanel>
         </DataTemplate>
       </TabControl.ItemTemplate>
       <TabControl.ContentTemplate>
         <DataTemplate>
-          <DockPanel LastChildFill="True">
-            <TextBlock Text="{Binding Content}" />
-          </DockPanel>
+            <ContentControl Content="{Binding Content}" />
         </DataTemplate>
       </TabControl.ContentTemplate>
     </TabControl>

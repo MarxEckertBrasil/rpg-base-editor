@@ -12,11 +12,12 @@ namespace RpgBaseEditor
         {
             UpdateComponent();
             DataContext = new MainWindowDataContext(this);
+            
         }
 
         public void UpdateComponent()
         {
-            AvaloniaXamlLoader.Load(this);      
+            AvaloniaXamlLoader.Load(this);
         }
     }
 

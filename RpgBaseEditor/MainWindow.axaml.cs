@@ -24,16 +24,20 @@ namespace RpgBaseEditor
     public class MainWindowDataContext
     {
         private MainWindow _window {get;}
+        private TabControl _tabControl {get;}
         public List<TabItemModel> TabItems  { get; } = new List<TabItemModel>();
         
         public MainWindowDataContext(MainWindow window)
         {
             _window = window;
+            _tabControl = _window.FindControl<TabControl>("TabControl");
         }
 
         public void MenuNewCampaign()
         {
-            TabItems.Add(new TabItemModel("campaign"+TabItems.Count, new CampaignEditor(), this));
+            var campaignEditor = new CampaignEditor();
+
+            TabItems.Add(new TabItemModel("campaign"+TabItems.Count, campaignEditor, this));
             _window.UpdateComponent();
         }
 
@@ -53,8 +57,8 @@ namespace RpgBaseEditor
     {
         private MainWindowDataContext _dataContext { get; }
         public string Header { get; }
-        public ContentControl Content { get; }
-        public TabItemModel(string header, ContentControl content, MainWindowDataContext dataContext)
+        public UserControl Content { get; }
+        public TabItemModel(string header, UserControl content, MainWindowDataContext dataContext)
         {
             _dataContext = dataContext;
             Header = header;

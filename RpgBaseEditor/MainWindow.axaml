@@ -18,7 +18,7 @@
       </MenuItem>
     </Menu>
     
-    <TabControl Items="{Binding TabItems}">
+    <TabControl Name="TabControl" Items="{Binding TabItems}">
       <TabControl.ItemTemplate>
         <DataTemplate>
           <DockPanel>
@@ -29,7 +29,7 @@
       </TabControl.ItemTemplate>
       <TabControl.ContentTemplate>
         <DataTemplate>
-            <ContentControl Content="{Binding Content}" />
+            <UserControl Content="{Binding Content}" />
         </DataTemplate>
       </TabControl.ContentTemplate>
     </TabControl>

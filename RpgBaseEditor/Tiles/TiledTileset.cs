@@ -20,7 +20,6 @@ namespace RpgBaseEditor.Tiles
         public string version { get; set; }
 
         public int x_tiles { get; set; }
-        public int y_tiles { get; set; }
     }
     
     public class Object

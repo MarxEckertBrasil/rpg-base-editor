@@ -6,14 +6,9 @@ using System.Windows.Input;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
-using Avalonia.Interactivity;
 using Avalonia.Markup.Xaml;
 using Avalonia.Media;
 using Avalonia.Media.Imaging;
-using Avalonia.Metadata;
-using Avalonia.Platform;
-using Avalonia.Rendering.SceneGraph;
-using Avalonia.Visuals.Media.Imaging;
 using LibCap;
 using Newtonsoft.Json;
 using RpgBaseEditor.Tiles;
@@ -136,8 +131,7 @@ namespace RpgBaseEditor
                 if (tiledTileset != null)
                 {
                     tiledTileset.x_tiles = (int)((tiledTileset.imagewidth - tiledTileset.margin*2) / tiledTileset.tilewidth);
-                    tiledTileset.y_tiles = (int)((tiledTileset.imageheight - tiledTileset.margin*2) / tiledTileset.tileheight);
-
+                    
                     _tiledMap.TiledTilesets.Add((Firstgid: tileset.firstgid, Tileset: tiledTileset, Source: tileset.source));             
                 }
             }
@@ -228,7 +222,7 @@ namespace RpgBaseEditor
             var tileTileset = tiledMap.TiledTilesets.LastOrDefault(x => tile >= x.Firstgid);
 
             var x_pos = ((tile - tileTileset.Firstgid) % tileTileset.Tileset.x_tiles) * tileTileset.Tileset.tilewidth + tileTileset.Tileset.margin;
-            var y_pos = (int)(Math.Floor((decimal)((tile - tileTileset.Firstgid) / tileTileset.Tileset.y_tiles)) * tileTileset.Tileset.tileheight + tileTileset.Tileset.margin);
+            var y_pos = (int)(Math.Floor((decimal)((tile - tileTileset.Firstgid) / tileTileset.Tileset.x_tiles)) * tileTileset.Tileset.tileheight + tileTileset.Tileset.margin);
             
             var rec = new Rect((int)x_pos, y_pos, tiledMap.tilewidth, tiledMap.tileheight);
 
@@ -249,16 +243,16 @@ namespace RpgBaseEditor
 
             if (SelectedRec.Width > 0 && SelectedRec.Height > 0)
             {
-                context.DrawLine(new Pen(new SolidColorBrush(Color.FromRgb(200,200,200)), 1), new Point(SelectedRec.X, SelectedRec.Y), 
+                context.DrawLine(new Pen(new SolidColorBrush(Color.FromRgb(255,0,0)), 2), new Point(SelectedRec.X, SelectedRec.Y), 
                                 new Point(SelectedRec.X+SelectedRec.Width, SelectedRec.Y));
 
-                context.DrawLine(new Pen(new SolidColorBrush(Color.FromRgb(200,200,200)), 1), new Point(SelectedRec.X, SelectedRec.Y), 
+                context.DrawLine(new Pen(new SolidColorBrush(Color.FromRgb(255,0,0)), 2), new Point(SelectedRec.X, SelectedRec.Y), 
                                 new Point(SelectedRec.X, SelectedRec.Y+SelectedRec.Height)); 
 
-                context.DrawLine(new Pen(new SolidColorBrush(Color.FromRgb(200,200,200)), 1), new Point(SelectedRec.X+SelectedRec.Width, SelectedRec.Y), 
+                context.DrawLine(new Pen(new SolidColorBrush(Color.FromRgb(255,0,0)), 2), new Point(SelectedRec.X+SelectedRec.Width, SelectedRec.Y), 
                                 new Point(SelectedRec.X+SelectedRec.Width, SelectedRec.Y+SelectedRec.Height)); 
 
-                context.DrawLine(new Pen(new SolidColorBrush(Color.FromRgb(200,200,200)), 1), new Point(SelectedRec.X, SelectedRec.Y+SelectedRec.Height), 
+                context.DrawLine(new Pen(new SolidColorBrush(Color.FromRgb(255,0,0)), 2), new Point(SelectedRec.X, SelectedRec.Y+SelectedRec.Height), 
                                 new Point(SelectedRec.X+SelectedRec.Width, SelectedRec.Y+SelectedRec.Height));
             }
 

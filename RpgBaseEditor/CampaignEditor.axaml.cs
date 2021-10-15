@@ -108,7 +108,6 @@ namespace RpgBaseEditor
         public TileViewer(CampaignEditor userControl)
         {
             _userControl = userControl;
-            GetTiledMap(string.Empty);
 
             this.VerticalAlignment = Avalonia.Layout.VerticalAlignment.Top;
             this.HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Left;
@@ -116,7 +115,6 @@ namespace RpgBaseEditor
 
         public void GetTiledMap(string selectedMap)
         {
-            selectedMap = "Adventure/Maps/map.json";
             using StreamReader reader = new StreamReader(selectedMap);
             
             string json = reader.ReadToEnd();
@@ -287,6 +285,7 @@ namespace RpgBaseEditor
         public Grid MapGrid;
         public Button AddMapButton;
         public Button ExportButton;
+        public ScrollViewer ScrollViewer;
 
         private CampaignEditorControl _campaignEditorControl;
         private CapBuilder _capBuilder;
@@ -302,7 +301,13 @@ namespace RpgBaseEditor
             AddMapButton.Command = new AddMapCommand();
             AddMapButton.CommandParameter = this;
 
-            this.Children.Add(MapGrid);
+            ScrollViewer = new ScrollViewer();
+            ScrollViewer.MaxHeight = 165;
+            ScrollViewer.VerticalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Auto;
+            ScrollViewer.Content = MapGrid;
+            SetDock(ScrollViewer, Dock.Top);
+
+            this.Children.Add(ScrollViewer);
             this.Children.Add(AddMapButton);
             this.Children.Add(ExportButton);
 
@@ -313,12 +318,10 @@ namespace RpgBaseEditor
             var newGrid = new Grid();
             newGrid.ShowGridLines = true;
             newGrid.Width = 500;
-            newGrid.Height = 165;
+
             var colDef1 = new ColumnDefinition();
             colDef1.Width = new GridLength(1, GridUnitType.Auto);
             newGrid.ColumnDefinitions.Add(colDef1);
-
-            SetDock(newGrid, Dock.Top);
 
             return newGrid;
         }
@@ -327,7 +330,7 @@ namespace RpgBaseEditor
         {
             var rowDef = new RowDefinition();
             rowDef.Height = new GridLength(1, GridUnitType.Auto);
-
+            
             var rowPanel = new DockPanel();
             var button = CreateButton("-");
             button.HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Right;
@@ -340,7 +343,7 @@ namespace RpgBaseEditor
             rowPanel.Children.Add(label);
             rowPanel.Children.Add(button);
             rowPanel.Name = map;
-
+            
             MapGrid.RowDefinitions.Add(rowDef);
             Grid.SetRow(rowPanel, MapGrid.RowDefinitions.Count - 1);
             MapGrid.Children.Add(rowPanel);

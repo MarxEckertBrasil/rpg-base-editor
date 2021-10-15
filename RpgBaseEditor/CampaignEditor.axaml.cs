@@ -10,7 +10,7 @@ using Avalonia.Markup.Xaml;
 using Avalonia.Media;
 using Avalonia.Media.Imaging;
 using LibCap;
-using Newtonsoft.Json;
+using System.Text.Json;
 using RpgBaseEditor.Tiles;
 using static Avalonia.Media.DrawingContext;
 
@@ -129,13 +129,13 @@ namespace RpgBaseEditor
             using StreamReader reader = new StreamReader(selectedMap);
             
             string json = reader.ReadToEnd();
-            _tiledMap = JsonConvert.DeserializeObject<TiledMap>(json);
+            _tiledMap = JsonSerializer.Deserialize<TiledMap>(json);
 
             foreach (var tileset in _tiledMap.tilesets)
             {
                 using StreamReader tilesetReader = new StreamReader(CampaignFolder+tileset.source);
                 json = tilesetReader.ReadToEnd();
-                var tiledTileset = JsonConvert.DeserializeObject<TiledTileset>(json);
+                var tiledTileset = JsonSerializer.Deserialize<TiledTileset>(json);
 
                 if (tiledTileset != null)
                 {

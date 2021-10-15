@@ -22,7 +22,7 @@ namespace RpgBaseEditor.Tiles
         public int width { get; set; }
 
 
-        internal List<(int Firstgid, TiledTileset Tileset)> TiledTilesets = new List<(int Firstgid, TiledTileset Tileset)>();
+        internal List<(int Firstgid, TiledTileset Tileset, string Source)> TiledTilesets = new List<(int Firstgid, TiledTileset Tileset, string Source)>();
         internal List<(int Firstgid, Bitmap Texture)> TiledMapTextures = new List<(int Firstgid, Bitmap Texture)>();
     }
 

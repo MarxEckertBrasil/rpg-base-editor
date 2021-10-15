@@ -60,7 +60,7 @@ namespace RpgBaseEditor
         {
             _campaignEditor = campaignEditor;
             TileViewerPanel = new TileViewer(campaignEditor);
-            CampaignEditorPanel = new CampaignEditorControl(campaignEditor, TileViewerPanel);
+            CampaignEditorPanel = new CampaignEditorControl(campaignEditor, TileViewerPanel, this);
             Content = new DockPanel();
             
             Content.Children.Add(TileViewerPanel);
@@ -104,6 +104,9 @@ namespace RpgBaseEditor
         public List<(string Type, uint Id, Rect rec)> ClickAreas = new List<(string Type, uint Id, Rect rec)>();
         public Rect SelectedRec = new Rect();
 
+        public string CampaignFolder { get; internal set; }
+
+        private string _lastMapSelected;
         //Avalonia
         public TileViewer(CampaignEditor userControl)
         {
@@ -115,6 +118,10 @@ namespace RpgBaseEditor
 
         public void GetTiledMap(string selectedMap)
         {
+            if (_lastMapSelected == selectedMap)
+                return;
+            
+            _lastMapSelected = selectedMap;
             using StreamReader reader = new StreamReader(selectedMap);
             
             string json = reader.ReadToEnd();
@@ -122,7 +129,7 @@ namespace RpgBaseEditor
 
             foreach (var tileset in _tiledMap.tilesets)
             {
-                using StreamReader tilesetReader = new StreamReader("Adventure/Maps/"+tileset.source);
+                using StreamReader tilesetReader = new StreamReader(CampaignFolder+tileset.source);
                 json = tilesetReader.ReadToEnd();
                 var tiledTileset = JsonConvert.DeserializeObject<TiledTileset>(json);
 
@@ -131,18 +138,21 @@ namespace RpgBaseEditor
                     tiledTileset.x_tiles = (int)((tiledTileset.imagewidth - tiledTileset.margin*2) / tiledTileset.tilewidth);
                     tiledTileset.y_tiles = (int)((tiledTileset.imageheight - tiledTileset.margin*2) / tiledTileset.tileheight);
 
-                    _tiledMap.TiledTilesets.Add((Firstgid: tileset.firstgid, Tileset: tiledTileset));             
+                    _tiledMap.TiledTilesets.Add((Firstgid: tileset.firstgid, Tileset: tiledTileset, Source: tileset.source));             
                 }
             }
             
             foreach (var tileTileset in _tiledMap.TiledTilesets)
             {
-                _tiledMap.TiledMapTextures.Add((Firstgid: tileTileset.Firstgid, Texture: new Bitmap("Adventure/Tilesets/"+tileTileset.Tileset.name+"/"+tileTileset.Tileset.image)));  
+                var image = tileTileset.Source.Remove(tileTileset.Source.Length - tileTileset.Source.Split(Path.AltDirectorySeparatorChar, Path.DirectorySeparatorChar).LastOrDefault().Length);
+                _tiledMap.TiledMapTextures.Add((Firstgid: tileTileset.Firstgid, Texture: new Bitmap(CampaignFolder+image+tileTileset.Tileset.image)));  
             }    
+
+            this.InvalidateVisual();
         }
 
         public void DrawTiledMap(DrawingContext context)
-        {       
+        {      
             var pushedState = new PushedState();  
             if (_tiledMap.TiledTilesets.Count <= 0)
                 return;
@@ -263,9 +273,10 @@ namespace RpgBaseEditor
         
         private TileViewer _tileViewerPanel;
         public CampaignEditor UserControl;
-     
-        public CampaignEditorControl(CampaignEditor userControl, TileViewer tileViewerPanel)
+        public CampaignEditorDataContext EditorDataContext;
+        public CampaignEditorControl(CampaignEditor userControl, TileViewer tileViewerPanel, CampaignEditorDataContext campaignEditorDataContext)
         {
+            EditorDataContext = campaignEditorDataContext;
             UserControl = userControl;
             _tileViewerPanel = tileViewerPanel;
             MapManager = new CampaignEditorMapManager(this);
@@ -288,12 +299,10 @@ namespace RpgBaseEditor
         public ScrollViewer ScrollViewer;
 
         private CampaignEditorControl _campaignEditorControl;
-        private CapBuilder _capBuilder;
+        private CapBuilder? _capBuilder;
         public CampaignEditorMapManager(CampaignEditorControl campaignEditorControl)
         {
             _campaignEditorControl = campaignEditorControl;
-            _capBuilder = new CapBuilder(Path.GetFullPath("Campaigns/"+_campaignEditorControl.UserControl.GetCampaignName(), 
-                                        Directory.GetCurrentDirectory()), false); 
             MapGrid = CreateGrid();
             AddMapButton = CreateButton("Add Map");
             ExportButton = CreateButton("Export .cap");
@@ -332,16 +341,19 @@ namespace RpgBaseEditor
             rowDef.Height = new GridLength(1, GridUnitType.Auto);
             
             var rowPanel = new DockPanel();
-            var button = CreateButton("-");
-            button.HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Right;
-            button.Command = new RemoveMapCommand() {MapPath=map};
-            button.CommandParameter = this;
+            var removeButton = CreateButton("-");
+            removeButton.HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Right;
+            removeButton.Command = new RemoveMapCommand() {MapPath=map};
+            removeButton.CommandParameter = this;
 
-            var label = new Label(){Content = map.Split(Path.DirectorySeparatorChar).LastOrDefault()};
-            label.HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Left;
-            
-            rowPanel.Children.Add(label);
-            rowPanel.Children.Add(button);
+            var buttonGrid = new Button(){Content = map.Split(Path.AltDirectorySeparatorChar, Path.DirectorySeparatorChar).LastOrDefault()};
+            buttonGrid.HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Left;
+            buttonGrid.CommandParameter = this;
+            buttonGrid.Command = new SelectMapCommand() {MapPath=map};
+
+
+            rowPanel.Children.Add(buttonGrid);
+            rowPanel.Children.Add(removeButton);
             rowPanel.Name = map;
             
             MapGrid.RowDefinitions.Add(rowDef);
@@ -358,7 +370,7 @@ namespace RpgBaseEditor
             return newButton;
         }
 
-        private class AddMapCommand : ICommand
+        internal class AddMapCommand : ICommand
         {
             public event EventHandler? CanExecuteChanged;
 
@@ -373,7 +385,7 @@ namespace RpgBaseEditor
             }
         }
         
-        private class RemoveMapCommand : ICommand
+        internal class RemoveMapCommand : ICommand
         {
             public string MapPath = string.Empty;
 
@@ -413,6 +425,28 @@ namespace RpgBaseEditor
             }
         }
 
+        internal class SelectMapCommand : ICommand
+        {
+            public string MapPath { get; set; }
+
+            public event EventHandler? CanExecuteChanged;
+
+            public bool CanExecute(object? parameter)
+            {
+                return true;
+            }
+
+            public void Execute(object? parameter)
+            {
+                var campaignFolder = "Campaigns/"+(parameter as CampaignEditorMapManager)._campaignEditorControl.UserControl.GetCampaignName()+"/";
+                var newMapPath = Path.GetFullPath(campaignFolder+"Maps/"+MapPath.Split(Path.AltDirectorySeparatorChar, Path.DirectorySeparatorChar).LastOrDefault(), 
+                                        Directory.GetCurrentDirectory());
+
+                (parameter as CampaignEditorMapManager)._campaignEditorControl.EditorDataContext.TileViewerPanel.CampaignFolder = campaignFolder;
+                (parameter as CampaignEditorMapManager)._campaignEditorControl.EditorDataContext.TileViewerPanel.GetTiledMap(newMapPath);
+            }
+        }
+
         private void GetPath()
         {
             OpenFileDialog fileDialog = new OpenFileDialog();
@@ -424,6 +458,10 @@ namespace RpgBaseEditor
             
             if (result.Length > 0)
             {
+                if (_capBuilder == null)
+                    _capBuilder = new CapBuilder(Path.GetFullPath("Campaigns/"+_campaignEditorControl.UserControl.GetCampaignName(), 
+                                        Directory.GetCurrentDirectory()), false); 
+
                 var asset = _capBuilder.AddAsset(result[0], AssetType.MAP);
 
                 if (!asset.IsOk)
@@ -441,5 +479,5 @@ namespace RpgBaseEditor
                 }
             }
         }
-    }
+    }  
 }

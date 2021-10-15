@@ -26,10 +26,10 @@ namespace RpgBaseEditor
             DataContext = new CampaignEditorDataContext(this);  
             this.AddHandler(PointerPressedEvent, (DataContext as CampaignEditorDataContext).MouseDownHandler);     
             
-            UpdateComponent();
+            InitializeComponent();
         }
 
-        public void UpdateComponent()
+        public void InitializeComponent()
         {
             AvaloniaXamlLoader.Load(this);                
         }
@@ -199,7 +199,7 @@ namespace RpgBaseEditor
                     }
             } 
             
-            _userControl.UpdateComponent();             
+            this.InvalidateVisual();             
         }
         
         private Rect GetTileRecById(uint tile, TiledMap tiledMap)

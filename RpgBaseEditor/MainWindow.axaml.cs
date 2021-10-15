@@ -15,6 +15,11 @@ namespace RpgBaseEditor
             
         }
 
+        public void SetSelectedItem(int index)
+        {
+            ((Content as DockPanel).Children[1] as TabControl).SelectedIndex = index;
+        }
+
         public void UpdateComponent()
         {
             AvaloniaXamlLoader.Load(this);
@@ -24,13 +29,11 @@ namespace RpgBaseEditor
     public class MainWindowDataContext
     {
         private MainWindow _window {get;}
-        private TabControl _tabControl {get;}
         public List<TabItemModel> TabItems  { get; } = new List<TabItemModel>();
         
         public MainWindowDataContext(MainWindow window)
         {
             _window = window;
-            _tabControl = _window.FindControl<TabControl>("TabControl");
         }
 
         public void MenuNewCampaign()
@@ -38,7 +41,9 @@ namespace RpgBaseEditor
             var campaignEditor = new CampaignEditor();
 
             TabItems.Add(new TabItemModel("campaign"+TabItems.Count, campaignEditor, this));
+        
             _window.UpdateComponent();
+            _window.SetSelectedItem(TabItems.Count - 1);
         }
 
         public void RemoveTabItem(TabItemModel tabItem)

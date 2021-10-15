@@ -39,8 +39,9 @@ namespace RpgBaseEditor
         public void MenuNewCampaign()
         {
             var campaignEditor = new CampaignEditor();
+            campaignEditor.CampaignName = "campaign"+TabItems.Count;
 
-            TabItems.Add(new TabItemModel("campaign"+TabItems.Count, campaignEditor, this));
+            TabItems.Add(new TabItemModel(campaignEditor.CampaignName, campaignEditor, this));
         
             _window.UpdateComponent();
             _window.SetSelectedItem(TabItems.Count - 1);

@@ -1,0 +1,3 @@
+[submodule "lib/libcap"]
+	path = lib/libcap
+	url = https://github.com/jaderebrasil/libcap

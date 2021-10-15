@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Windows.Input;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
@@ -13,6 +14,7 @@ using Avalonia.Metadata;
 using Avalonia.Platform;
 using Avalonia.Rendering.SceneGraph;
 using Avalonia.Visuals.Media.Imaging;
+using LibCap;
 using Newtonsoft.Json;
 using RpgBaseEditor.Tiles;
 using static Avalonia.Media.DrawingContext;
@@ -21,6 +23,7 @@ namespace RpgBaseEditor
 {
     public partial class CampaignEditor : UserControl
     {
+        public string CampaignName;
         public CampaignEditor()
         {
             DataContext = new CampaignEditorDataContext(this);  
@@ -29,6 +32,16 @@ namespace RpgBaseEditor
             InitializeComponent();
         }
 
+        public Window GetParentWindow()
+        {
+            return (Parent.Parent.Parent.Parent as Window);
+        }
+
+        public string GetCampaignName()
+        {
+            return CampaignName;
+        }
+        
         public void InitializeComponent()
         {
             AvaloniaXamlLoader.Load(this);                
@@ -249,12 +262,13 @@ namespace RpgBaseEditor
     {
         public CampaignEditorMapManager MapManager;
         public Panel TileManager;
-
+        
         private TileViewer _tileViewerPanel;
-        private CampaignEditor _userControl;
+        public CampaignEditor UserControl;
+     
         public CampaignEditorControl(CampaignEditor userControl, TileViewer tileViewerPanel)
         {
-            _userControl = userControl;
+            UserControl = userControl;
             _tileViewerPanel = tileViewerPanel;
             MapManager = new CampaignEditorMapManager(this);
             TileManager = new Panel();
@@ -275,45 +289,154 @@ namespace RpgBaseEditor
         public Button ExportButton;
 
         private CampaignEditorControl _campaignEditorControl;
+        private CapBuilder _capBuilder;
         public CampaignEditorMapManager(CampaignEditorControl campaignEditorControl)
         {
             _campaignEditorControl = campaignEditorControl;
+            _capBuilder = new CapBuilder(Path.GetFullPath("Campaigns/"+_campaignEditorControl.UserControl.GetCampaignName(), 
+                                        Directory.GetCurrentDirectory()), false); 
             MapGrid = CreateGrid();
             AddMapButton = CreateButton("Add Map");
             ExportButton = CreateButton("Export .cap");
+
+            AddMapButton.Command = new AddMapCommand();
+            AddMapButton.CommandParameter = this;
 
             this.Children.Add(MapGrid);
             this.Children.Add(AddMapButton);
             this.Children.Add(ExportButton);
 
-            this.VerticalAlignment = Avalonia.Layout.VerticalAlignment.Top;
-            this.HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Center;
         }
 
         private Grid CreateGrid()
         {
             var newGrid = new Grid();
-            newGrid.Background = Brushes.Gainsboro;
-            newGrid.HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Center;
-            newGrid.VerticalAlignment = Avalonia.Layout.VerticalAlignment.Top;
             newGrid.ShowGridLines = true;
-            newGrid.Width = 200;
+            newGrid.Width = 500;
             newGrid.Height = 165;
+            var colDef1 = new ColumnDefinition();
+            colDef1.Width = new GridLength(1, GridUnitType.Auto);
+            newGrid.ColumnDefinitions.Add(colDef1);
+
+            SetDock(newGrid, Dock.Top);
 
             return newGrid;
+        }
+
+        private void SetRowOnGrid(string map)
+        {
+            var rowDef = new RowDefinition();
+            rowDef.Height = new GridLength(1, GridUnitType.Auto);
+
+            var rowPanel = new DockPanel();
+            var button = CreateButton("-");
+            button.HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Right;
+            button.Command = new RemoveMapCommand() {MapPath=map};
+            button.CommandParameter = this;
+
+            var label = new Label(){Content = map.Split(Path.DirectorySeparatorChar).LastOrDefault()};
+            label.HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Left;
+            
+            rowPanel.Children.Add(label);
+            rowPanel.Children.Add(button);
+            rowPanel.Name = map;
+
+            MapGrid.RowDefinitions.Add(rowDef);
+            Grid.SetRow(rowPanel, MapGrid.RowDefinitions.Count - 1);
+            MapGrid.Children.Add(rowPanel);
         }
 
         private Button CreateButton(string label)
         {
             var newButton = new Button();
-            newButton.Name = label;
+            newButton.Content = label;
             newButton.Background = Brushes.Blue;
-            newButton.HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Center;
-            newButton.VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center;
-            newButton.Width = 100;
-            newButton.Height = 20;
 
             return newButton;
+        }
+
+        private class AddMapCommand : ICommand
+        {
+            public event EventHandler? CanExecuteChanged;
+
+            public bool CanExecute(object? parameter)
+            {
+                return true;
+            }
+
+            public void Execute(object? parameter)
+            {
+                (parameter as CampaignEditorMapManager).GetPath();
+            }
+        }
+        
+        private class RemoveMapCommand : ICommand
+        {
+            public string MapPath = string.Empty;
+
+            public event EventHandler? CanExecuteChanged;
+
+            public bool CanExecute(object? parameter)
+            {
+                return true;
+            }
+
+            public void Execute(object? parameter)
+            {
+                var capBuilder = (parameter as CampaignEditorMapManager)._capBuilder;
+                if (!string.IsNullOrEmpty(MapPath))
+                {
+                    var asset = capBuilder.RemoveAsset(MapPath);
+
+                    if (!asset.IsOk)
+                    {
+                        var dialog = new Window();
+                        dialog.Content = new Label() {Content = "Error:\n" + asset.Msg};
+                        dialog.WindowStartupLocation = WindowStartupLocation.CenterOwner;
+                        dialog.ExtendClientAreaToDecorationsHint = true;
+
+                        dialog.ShowDialog((parameter as CampaignEditorMapManager)._campaignEditorControl.UserControl.GetParentWindow());
+                    }
+                    else
+                    {
+                        var removeMaps = new List<IControl>((parameter as CampaignEditorMapManager).MapGrid.Children.Where(x => x.Name == MapPath));
+                        foreach (var map in removeMaps)
+                        {
+                            (parameter as CampaignEditorMapManager).MapGrid.Children.Remove(map);
+                            (parameter as CampaignEditorMapManager).MapGrid.RowDefinitions.RemoveAt(0);
+                        }
+                    }
+                }
+            }
+        }
+
+        private void GetPath()
+        {
+            OpenFileDialog fileDialog = new OpenFileDialog();
+
+            var fileDialogAsync = fileDialog.ShowAsync(_campaignEditorControl.UserControl.GetParentWindow()); 
+            fileDialogAsync.Wait();
+
+            var result = fileDialogAsync.Result;      
+            
+            if (result.Length > 0)
+            {
+                var asset = _capBuilder.AddAsset(result[0], AssetType.MAP);
+
+                if (!asset.IsOk)
+                {
+                    var dialog = new Window();
+                    dialog.Content = new Label() {Content = "Error:\n" + asset.Msg};
+                    dialog.WindowStartupLocation = WindowStartupLocation.CenterOwner;
+                    dialog.ExtendClientAreaToDecorationsHint = true;
+
+                    dialog.ShowDialog(_campaignEditorControl.UserControl.GetParentWindow());
+                }
+                else
+                {
+                    SetRowOnGrid(result[0]);
+                }
+            }
         }
     }
 }

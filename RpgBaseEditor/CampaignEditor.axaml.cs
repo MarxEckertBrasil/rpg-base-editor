@@ -315,6 +315,9 @@ namespace RpgBaseEditor
             AddMapButton.Command = new AddMapCommand();
             AddMapButton.CommandParameter = this;
 
+            ExportButton.Command = new ExportCommand();
+            ExportButton.CommandParameter = this;
+
             ScrollViewer = new ScrollViewer();
             ScrollViewer.MaxHeight = 165;
             ScrollViewer.VerticalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Auto;
@@ -356,7 +359,12 @@ namespace RpgBaseEditor
             buttonGrid.CommandParameter = this;
             buttonGrid.Command = new SelectMapCommand() {MapPath=map};
 
+            var moveButton = CreateButton("^");
+            moveButton.Command = new MoveMapCommand() {RowPanel = rowPanel};
+            moveButton.CommandParameter = this;
+            buttonGrid.HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Left;
 
+            rowPanel.Children.Add(moveButton);
             rowPanel.Children.Add(buttonGrid);
             rowPanel.Children.Add(removeButton);
             rowPanel.Name = map;
@@ -390,6 +398,31 @@ namespace RpgBaseEditor
             }
         }
         
+        internal class ExportCommand : ICommand
+        {
+            public event EventHandler? CanExecuteChanged;
+
+            public bool CanExecute(object? parameter)
+            {
+                return true;
+            }
+
+            public void Execute(object? parameter)
+            {
+                var campManager = (CampaignEditorMapManager)parameter;
+
+                var mapList = campManager.MapGrid.Children.OrderBy(x => Grid.GetRow((Panel)x)).Select(x => x.Name);
+
+                var mapListJson = JsonSerializer.Serialize(mapList);       
+                File.WriteAllText("Campaigns/"+campManager._campaignEditorControl.UserControl.GetCampaignName()+"/maps.json", mapListJson);
+                campManager._capBuilder.AddAsset("Campaigns/"+campManager._campaignEditorControl.UserControl.GetCampaignName()+"/maps.json", AssetType.META);
+
+                File.Delete("Campaigns/"+campManager._campaignEditorControl.UserControl.GetCampaignName()+"/maps.json");
+
+                campManager._capBuilder.ExportCap("Campaigns/"+campManager._campaignEditorControl.UserControl.GetCampaignName()+".cap", true);
+            }
+        }
+
         internal class RemoveMapCommand : ICommand
         {
             public Panel? RowPanel;
@@ -436,6 +469,35 @@ namespace RpgBaseEditor
                             campEditor?._campaignEditorControl.EditorDataContext.TileViewerPanel.GetTiledMap(string.Empty);
                     }
                 }
+            }
+        }
+
+        internal class MoveMapCommand : ICommand
+        {
+            public DockPanel? RowPanel;
+            public event EventHandler? CanExecuteChanged;
+
+            public bool CanExecute(object? parameter)
+            {
+                return true;
+            }
+
+            public void Execute(object? parameter)
+            {
+                if (RowPanel == null)
+                    return;
+                
+                var campManager = (CampaignEditorMapManager)parameter;
+
+                var index = Grid.GetRow(RowPanel);
+                
+                if (index <= 0)
+                    return;
+
+                var aux = (DockPanel)campManager.MapGrid.Children.First(x => Grid.GetRow((DockPanel)x) == 0);
+
+                Grid.SetRow(RowPanel, 0);
+                Grid.SetRow(aux, index);
             }
         }
 

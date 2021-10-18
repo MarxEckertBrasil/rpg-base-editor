@@ -367,7 +367,9 @@ namespace RpgBaseEditor
             rowPanel.Children.Add(moveButton);
             rowPanel.Children.Add(buttonGrid);
             rowPanel.Children.Add(removeButton);
-            rowPanel.Name = map;
+            rowPanel.Name = Path.GetRelativePath(Directory.GetCurrentDirectory()
+            ,_campaignEditorControl.UserControl.GetCampaignName()+"/Maps/"+map.Split(Path.AltDirectorySeparatorChar, Path.DirectorySeparatorChar).LastOrDefault() 
+                                        );
             
             MapGrid.RowDefinitions.Add(rowDef);
             Grid.SetRow(rowPanel, MapGrid.RowDefinitions.Count - 1);

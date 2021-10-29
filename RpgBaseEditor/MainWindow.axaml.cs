@@ -3,6 +3,7 @@ using Avalonia.Controls;
 using Avalonia.Markup.Xaml;
 using Avalonia.Media;
 using System.Collections.Generic;
+using System.IO;
 
 namespace RpgBaseEditor
 {
@@ -45,6 +46,48 @@ namespace RpgBaseEditor
         
             _window.UpdateComponent();
             _window.SetSelectedItem(TabItems.Count - 1);
+        }
+
+        public void MenuOpenCampaign()
+        {
+            OpenFolderDialog folderDialog = new OpenFolderDialog();
+
+            var folderDialogAsync = folderDialog.ShowAsync(_window); 
+            folderDialogAsync.Wait();
+
+            var result = folderDialogAsync.Result;      
+            
+            if (result.Length > 0)
+            {
+                if (Directory.Exists(result + "/Meta"))
+                {
+                    if (File.Exists(result + "/Meta/maps.json"))
+                    {
+                        MenuNewCampaign();
+                        (TabItems[TabItems.Count - 1].Content as CampaignEditor).LoadCampaign(result);
+                    }
+                    else
+                    {
+                       var dialog = new Window();
+                        dialog.Content = new Label() {Content = "Error:\n" + "maps.json doesn't exists"};
+                        dialog.WindowStartupLocation = WindowStartupLocation.CenterOwner;
+                        dialog.ExtendClientAreaToDecorationsHint = true;
+
+                        dialog.ShowDialog(_window); 
+                    }
+
+                }
+                else
+                {
+                    var dialog = new Window();
+                    dialog.Content = new Label() {Content = "Error:\n" + "Meta folder doesn't exists"};
+                    dialog.WindowStartupLocation = WindowStartupLocation.CenterOwner;
+                    dialog.ExtendClientAreaToDecorationsHint = true;
+
+                    dialog.ShowDialog(_window);
+                }
+            }
+            
         }
 
         public void RemoveTabItem(TabItemModel tabItem)

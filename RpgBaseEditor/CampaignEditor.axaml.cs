@@ -41,6 +41,19 @@ namespace RpgBaseEditor
         {
             AvaloniaXamlLoader.Load(this);                
         }
+
+        public void LoadCampaign(string path)
+        {
+            CampaignName = path.Split(Path.AltDirectorySeparatorChar, Path.DirectorySeparatorChar).LastOrDefault();
+            
+            using StreamReader reader = new StreamReader(path + "/Meta/maps.json");
+            
+            string json = reader.ReadToEnd();
+
+            var mapPaths = JsonSerializer.Deserialize<string[]>(json);
+
+            (DataContext as CampaignEditorDataContext).LoadMaps(mapPaths);
+        }
     }
 
     public class CampaignEditorDataContext
@@ -82,6 +95,11 @@ namespace RpgBaseEditor
                 return true;
 
             return false;
+        }
+
+        public void LoadMaps(string[] paths)
+        {
+            CampaignEditorPanel.MapManager.LoadMaps(paths);
         }
     }
 
@@ -522,6 +540,14 @@ namespace RpgBaseEditor
 
                 (parameter as CampaignEditorMapManager)._campaignEditorControl.EditorDataContext.TileViewerPanel.CampaignFolder = campaignFolder;
                 (parameter as CampaignEditorMapManager)._campaignEditorControl.EditorDataContext.TileViewerPanel.GetTiledMap(newMapPath);
+            }
+        }
+
+        public void LoadMaps(string[] paths)
+        {
+            foreach (var path in paths)
+            {
+                SetRowOnGrid(path);
             }
         }
 

@@ -10,7 +10,7 @@
   <DockPanel>
     <Menu DockPanel.Dock="Top">
       <MenuItem Header="_File">
-        <MenuItem Header="_Open..."/>
+        <MenuItem Header="_Open..." Command="{Binding MenuOpenCampaign}"/>
         <MenuItem Header="New Campaign" Command="{Binding MenuNewCampaign}"/>
         <!--<MenuItem Header="New RPG System"/>-->
         <Separator/>

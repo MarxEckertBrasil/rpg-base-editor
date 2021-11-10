@@ -46,13 +46,15 @@ namespace RpgBaseEditor
         {
             CampaignName = path.Split(Path.AltDirectorySeparatorChar, Path.DirectorySeparatorChar).LastOrDefault();
             
-            using StreamReader reader = new StreamReader(path + "/Meta/maps.json");
-            
-            string json = reader.ReadToEnd();
+           IEnumerable<string> mapPaths = new List<string>();
 
-            var mapPaths = JsonSerializer.Deserialize<string[]>(json);
+            using (StreamReader reader = new StreamReader(path + "/Meta/maps.json"))
+            {    
+                string json = reader.ReadToEnd();
+                mapPaths = JsonSerializer.Deserialize<IEnumerable<string>>(json);
+            }
 
-            (DataContext as CampaignEditorDataContext).LoadMaps(mapPaths);
+            (DataContext as CampaignEditorDataContext).LoadMaps(mapPaths.ToArray());
         }
     }
 
@@ -61,7 +63,6 @@ namespace RpgBaseEditor
         public DockPanel Content { get; }
         public TileViewer TileViewerPanel {get;}
         public CampaignEditorControl CampaignEditorPanel {get;}
-
         private CampaignEditor _campaignEditor;
 
         public CampaignEditorDataContext(CampaignEditor campaignEditor)
@@ -69,6 +70,7 @@ namespace RpgBaseEditor
             _campaignEditor = campaignEditor;
             TileViewerPanel = new TileViewer(campaignEditor);
             CampaignEditorPanel = new CampaignEditorControl(campaignEditor, TileViewerPanel, this);
+
             Content = new DockPanel();
             
             Content.Children.Add(TileViewerPanel);
@@ -81,11 +83,12 @@ namespace RpgBaseEditor
             if ( mousePos != null &&
                 TileViewerPanel.ClickAreas.Count > 0 &&
                 TileViewerPanel.ClickAreas.Any(x => VerifyMouseInRec(mousePos.Value, x.rec)))
-                TileViewerPanel.SelectedRec = TileViewerPanel.ClickAreas.FirstOrDefault(x => VerifyMouseInRec(mousePos.Value, x.rec)).rec;
+                TileViewerPanel.SelectedTile = TileViewerPanel.ClickAreas.LastOrDefault(x => VerifyMouseInRec(mousePos.Value, x.rec));
             else
-                TileViewerPanel.SelectedRec = new Rect();
+                TileViewerPanel.SelectedTile = ("", 0, new Rect());
                 
             TileViewerPanel.InvalidateVisual();
+            CampaignEditorPanel.InvalidateTileEditVisual();
         }
 
         private bool VerifyMouseInRec(Point mousePos, Rect rec)
@@ -115,7 +118,7 @@ namespace RpgBaseEditor
         private CampaignEditor _userControl;
 
         public List<(string Type, uint Id, Rect rec)> ClickAreas = new List<(string Type, uint Id, Rect rec)>();
-        public Rect SelectedRec = new Rect();
+        public (string Type, uint Id, Rect rec) SelectedTile = ("", 0, new Rect());
 
         public string CampaignFolder { get; internal set; }
 
@@ -135,7 +138,7 @@ namespace RpgBaseEditor
             {
                 _tiledMap = new TiledMap();
                 LastMapSelected = string.Empty;
-                SelectedRec = new Rect();
+                SelectedTile = ("", 0, new Rect());
                 this.InvalidateVisual();
                 return;
             }
@@ -168,12 +171,12 @@ namespace RpgBaseEditor
                 var image = tileTileset.Source.Remove(tileTileset.Source.Length - tileTileset.Source.Split(Path.AltDirectorySeparatorChar, Path.DirectorySeparatorChar).LastOrDefault().Length);
                 _tiledMap.TiledMapTextures.Add((Firstgid: tileTileset.Firstgid, Texture: new Bitmap(CampaignFolder+image+tileTileset.Tileset.image)));  
             }    
-
-            SelectedRec = new Rect();
+            
+            SelectedTile = ("", 0, new Rect());
 
             this.InvalidateVisual();
         }
-
+        
         public void DrawTiledMap(DrawingContext context)
         {      
             var pushedState = new PushedState();  
@@ -185,62 +188,78 @@ namespace RpgBaseEditor
                 int x_pos = 0;
                 int y_pos = 0;
                 
-                if (layer.data != null)
-                    foreach (var tile in layer.data)
-                    {   
-                        var newTransform = new Matrix(1,0,0,1,0,0);
-
-                        var tile_id = tile;
-                        tile_id &= ~(FLIPPED_HORIZONTALLY_FLAG |
-                                    FLIPPED_VERTICALLY_FLAG   |
-                                    FLIPPED_DIAGONALLY_FLAG   );
-
-                        if (tile_id > 0)
-                        {        
-                            var posVec = new System.Numerics.Vector2(x_pos*_tiledMap.tilewidth, y_pos*_tiledMap.tileheight);
-
-                            var rec = GetTileRecById(tile_id, _tiledMap);
-
-                            if ((tile & FLIPPED_DIAGONALLY_FLAG) > 0)
-                            {
-                                newTransform = newTransform * new Matrix(0, 1, 1, 0, 
-                                                    (posVec.X - posVec.Y) * IMAGE_SCALE, 
-                                                    (posVec.Y - posVec.X) * IMAGE_SCALE);
-                            }  
-
-                            if ((tile & FLIPPED_HORIZONTALLY_FLAG) > 0)
-                            {
-                                newTransform = newTransform * new Matrix(-1, 0, 0, 1, posVec.X * IMAGE_SCALE * 2 + _tiledMap.tilewidth*IMAGE_SCALE, 0);
-                            }
-
-                            if ((tile & FLIPPED_VERTICALLY_FLAG) > 0)
-                            {
-                                newTransform = newTransform * new Matrix(1, 0, 0, -1, 0,
-                                                        posVec.Y * IMAGE_SCALE * 2 + _tiledMap.tileheight*IMAGE_SCALE);
-                            }                    
-                        
-                            var source = _tiledMap.TiledMapTextures.LastOrDefault(x => tile_id >= x.Firstgid).Texture;
-
-                            var resizedRec = new Rect(posVec.X * IMAGE_SCALE, posVec.Y * IMAGE_SCALE, rec.Width * IMAGE_SCALE, rec.Height * IMAGE_SCALE);
-                           
-                            pushedState = context.PushSetTransform(newTransform); 
-
-                            context.DrawImage(source, rec, resizedRec);
-
-                            pushedState.Dispose();
-
-                            var selectableType = IsTileSelectable(tile_id);
-                            if (!string.IsNullOrEmpty(selectableType))
-                                ClickAreas.Add((selectableType, tile_id, resizedRec));
-                        }
-
-                        x_pos++;
-                        if (x_pos >= layer.width)
+                if (layer.data == null)
+                {
+                    if (layer.objects != null)
+                    {
+                        foreach (var obj in layer.objects)
                         {
-                            x_pos = 0;
-                            y_pos++;
+                            if (!obj.type.ToLowerInvariant().Contains("door"))
+                                continue;
+
+                            var resizedRec = new Rect(obj.x * IMAGE_SCALE, obj.y * IMAGE_SCALE, obj.width * IMAGE_SCALE, obj.height * IMAGE_SCALE);
+                            ClickAreas.Add(("Door", obj.id, resizedRec));
                         }
                     }
+
+                    continue;
+                }
+
+                foreach (var tile in layer.data)
+                {   
+                    var newTransform = new Matrix(1,0,0,1,0,0);
+
+                    var tile_id = tile;
+                    tile_id &= ~(FLIPPED_HORIZONTALLY_FLAG |
+                                FLIPPED_VERTICALLY_FLAG   |
+                                FLIPPED_DIAGONALLY_FLAG   );
+
+                    if (tile_id > 0)
+                    {        
+                        var posVec = new System.Numerics.Vector2(x_pos*_tiledMap.tilewidth, y_pos*_tiledMap.tileheight);
+
+                        var rec = GetTileRecById(tile_id, _tiledMap);
+
+                        if ((tile & FLIPPED_DIAGONALLY_FLAG) > 0)
+                        {
+                            newTransform = newTransform * new Matrix(0, 1, 1, 0, 
+                                                (posVec.X - posVec.Y) * IMAGE_SCALE, 
+                                                (posVec.Y - posVec.X) * IMAGE_SCALE);
+                        }  
+
+                        if ((tile & FLIPPED_HORIZONTALLY_FLAG) > 0)
+                        {
+                            newTransform = newTransform * new Matrix(-1, 0, 0, 1, posVec.X * IMAGE_SCALE * 2 + _tiledMap.tilewidth*IMAGE_SCALE, 0);
+                        }
+
+                        if ((tile & FLIPPED_VERTICALLY_FLAG) > 0)
+                        {
+                            newTransform = newTransform * new Matrix(1, 0, 0, -1, 0,
+                                                    posVec.Y * IMAGE_SCALE * 2 + _tiledMap.tileheight*IMAGE_SCALE);
+                        }                    
+                        
+                        var source = _tiledMap.TiledMapTextures.LastOrDefault(x => tile_id >= x.Firstgid).Texture;
+
+                        var resizedRec = new Rect(posVec.X * IMAGE_SCALE, posVec.Y * IMAGE_SCALE, rec.Width * IMAGE_SCALE, rec.Height * IMAGE_SCALE);
+                           
+                        pushedState = context.PushSetTransform(newTransform); 
+
+                        context.DrawImage(source, rec, resizedRec);
+
+                        pushedState.Dispose();
+
+                        var selectableType = IsTileSelectable(tile_id);
+                        if (!string.IsNullOrEmpty(selectableType))
+                            ClickAreas.Add((selectableType, tile_id, resizedRec));
+                    }
+
+                    x_pos++;
+                    if (x_pos >= layer.width)
+                    {
+                        x_pos = 0;
+                        y_pos++;
+                    }
+                }
             } 
             
             this.InvalidateVisual();             
@@ -270,26 +289,100 @@ namespace RpgBaseEditor
         {            
             DrawTiledMap(context);             
 
-            if (SelectedRec.Width > 0 && SelectedRec.Height > 0)
+            if (SelectedTile.rec.Width > 0 && SelectedTile.rec.Height > 0)
             {
-                context.DrawLine(new Pen(new SolidColorBrush(Color.FromRgb(255,0,0)), 2), new Point(SelectedRec.X, SelectedRec.Y), 
-                                new Point(SelectedRec.X+SelectedRec.Width, SelectedRec.Y));
+                context.DrawLine(new Pen(new SolidColorBrush(Color.FromRgb(255,0,0)), 2), new Point(SelectedTile.rec.X, SelectedTile.rec.Y), 
+                                new Point(SelectedTile.rec.X+SelectedTile.rec.Width, SelectedTile.rec.Y));
 
-                context.DrawLine(new Pen(new SolidColorBrush(Color.FromRgb(255,0,0)), 2), new Point(SelectedRec.X, SelectedRec.Y), 
-                                new Point(SelectedRec.X, SelectedRec.Y+SelectedRec.Height)); 
+                context.DrawLine(new Pen(new SolidColorBrush(Color.FromRgb(255,0,0)), 2), new Point(SelectedTile.rec.X, SelectedTile.rec.Y), 
+                                new Point(SelectedTile.rec.X, SelectedTile.rec.Y+SelectedTile.rec.Height)); 
 
-                context.DrawLine(new Pen(new SolidColorBrush(Color.FromRgb(255,0,0)), 2), new Point(SelectedRec.X+SelectedRec.Width, SelectedRec.Y), 
-                                new Point(SelectedRec.X+SelectedRec.Width, SelectedRec.Y+SelectedRec.Height)); 
+                context.DrawLine(new Pen(new SolidColorBrush(Color.FromRgb(255,0,0)), 2), new Point(SelectedTile.rec.X+SelectedTile.rec.Width, SelectedTile.rec.Y), 
+                                new Point(SelectedTile.rec.X+SelectedTile.rec.Width, SelectedTile.rec.Y+SelectedTile.rec.Height)); 
 
-                context.DrawLine(new Pen(new SolidColorBrush(Color.FromRgb(255,0,0)), 2), new Point(SelectedRec.X, SelectedRec.Y+SelectedRec.Height), 
-                                new Point(SelectedRec.X+SelectedRec.Width, SelectedRec.Y+SelectedRec.Height));
+                context.DrawLine(new Pen(new SolidColorBrush(Color.FromRgb(255,0,0)), 2), new Point(SelectedTile.rec.X, SelectedTile.rec.Y+SelectedTile.rec.Height), 
+                                new Point(SelectedTile.rec.X+SelectedTile.rec.Width, SelectedTile.rec.Y+SelectedTile.rec.Height));
             }
 
             base.Render(context);
         }
+
+        internal System.Collections.IEnumerable GetDoorIds(string selectedMap)
+        {
+            using StreamReader reader = new StreamReader("Campaigns/"+selectedMap);
+            
+            string json = reader.ReadToEnd();
+            var tiledMap = JsonSerializer.Deserialize<TiledMap>(json);
+
+            foreach (var tileset in tiledMap.tilesets)
+            {
+                using StreamReader tilesetReader = new StreamReader(CampaignFolder+tileset.source);
+                json = tilesetReader.ReadToEnd();
+                var tiledTileset = JsonSerializer.Deserialize<TiledTileset>(json);
+
+                if (tiledTileset != null)
+                {
+                    tiledTileset.x_tiles = (int)((tiledTileset.imagewidth - tiledTileset.margin*2) / tiledTileset.tilewidth);
+                    
+                    tiledMap.TiledTilesets.Add((Firstgid: tileset.firstgid, Tileset: tiledTileset, Source: tileset.source));             
+                }
+            }
+
+            var doorIdList = new List<string>();
+            foreach (var layer in tiledMap.layers)
+            {
+                if (layer.data != null)
+                    continue;
+                
+                if (layer.objects == null || layer.objects.Count == 0)
+                    continue;
+
+                foreach (var obj in layer.objects)
+                {
+                    if (!obj.type.ToLowerInvariant().Contains("door"))
+                        continue;
+                    
+                    doorIdList.Add(obj.id.ToString());
+                }
+            }
+
+            return doorIdList;
+        }
+
+        internal TiledMap GetTiledMapOnly(string mapPath)
+        {
+            using StreamReader reader = new StreamReader(mapPath);
+            
+            string json = reader.ReadToEnd();
+            var tiledMap = JsonSerializer.Deserialize<TiledMap>(json);
+
+            foreach (var tileset in tiledMap.tilesets)
+            {
+                using StreamReader tilesetReader = new StreamReader(CampaignFolder+tileset.source);
+                json = tilesetReader.ReadToEnd();
+                var tiledTileset = JsonSerializer.Deserialize<TiledTileset>(json);
+
+                if (tiledTileset != null)
+                {
+                    tiledTileset.x_tiles = (int)((tiledTileset.imagewidth - tiledTileset.margin*2) / tiledTileset.tilewidth);
+                    
+                    tiledMap.TiledTilesets.Add((Firstgid: tileset.firstgid, Tileset: tiledTileset, Source: tileset.source));             
+                }
+            }
+            
+
+            return tiledMap;
+        }
+
+        internal void UpdateTiledMap(string mapPath, TiledMap tiledMap)
+        {
+            var tiledMapJson = JsonSerializer.Serialize(tiledMap, new JsonSerializerOptions() {WriteIndented=true});       
+            File.WriteAllText(mapPath, tiledMapJson);
+        }
+
     }
 
-    public class CampaignEditorControl : Panel
+    public class CampaignEditorControl : DockPanel
     {
         public CampaignEditorMapManager MapManager;
         public Panel TileManager;
@@ -297,21 +390,61 @@ namespace RpgBaseEditor
         private TileViewer _tileViewerPanel;
         public CampaignEditor UserControl;
         public CampaignEditorDataContext EditorDataContext;
+        public TileEditMapManager TileEditMapManager;
+        
         public CampaignEditorControl(CampaignEditor userControl, TileViewer tileViewerPanel, CampaignEditorDataContext campaignEditorDataContext)
-        {
+        {    
             EditorDataContext = campaignEditorDataContext;
             UserControl = userControl;
             _tileViewerPanel = tileViewerPanel;
             MapManager = new CampaignEditorMapManager(this);
             TileManager = new Panel();
 
+            TileEditMapManager = new TileEditMapManager(_tileViewerPanel, MapManager);
+
+            DockPanel.SetDock(MapManager, Dock.Right);
+            DockPanel.SetDock(MapManager, Dock.Top);
+
+            DockPanel.SetDock(TileEditMapManager, Dock.Right);
+            DockPanel.SetDock(TileEditMapManager, Dock.Bottom);
+
+            DockPanel.SetDock(TileManager, Dock.Left);
+
             this.Children.Add(MapManager);
+            this.Children.Add(TileEditMapManager);
             this.Children.Add(TileManager);
 
             this.VerticalAlignment = Avalonia.Layout.VerticalAlignment.Top;
             this.HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Right;
         }
 
+        public void InvalidateTileEditVisual()
+        {
+            if (!string.IsNullOrEmpty(_tileViewerPanel.SelectedTile.Type))
+                TileEditMapManager.TypeLabel.Content = "Tile Type: " + _tileViewerPanel.SelectedTile.Type;
+
+            if (TileEditMapManager.TypeLabel.Content.GetType() == typeof(string) &&
+                (TileEditMapManager.TypeLabel.Content as string).ToLowerInvariant().Contains("door"))
+            {
+                TileEditMapManager.DoorIdLabel.Content = "Door Id: " + _tileViewerPanel.SelectedTile.Id;
+
+                TileEditMapManager.DestLabel.Content = "Destination:";
+
+                var formattedLastMap = _tileViewerPanel.LastMapSelected.Split(Path.AltDirectorySeparatorChar, Path.DirectorySeparatorChar).LastOrDefault();
+                TileEditMapManager.ListBox.Items = MapManager.MapGrid.Children.Where(name => (name as Panel).Name.Split(Path.AltDirectorySeparatorChar, Path.DirectorySeparatorChar).LastOrDefault() 
+                                    != formattedLastMap).Select(x => (x as Panel).Name);
+            }
+            else
+            {
+                TileEditMapManager.DoorIdLabel.Content = "";
+                TileEditMapManager.DestLabel.Content = "";
+                TileEditMapManager.ListBox.Items = new List<string>();
+                TileEditMapManager.SelectDoorLabel.Content = "";
+                TileEditMapManager.DoorIdListBox.Items = new List<string>();
+            }
+
+            TileEditMapManager.InvalidateVisual();
+        }
     }
 
     public class CampaignEditorMapManager : DockPanel
@@ -323,6 +456,7 @@ namespace RpgBaseEditor
 
         private CampaignEditorControl _campaignEditorControl;
         private CapBuilder? _capBuilder;
+
         public CampaignEditorMapManager(CampaignEditorControl campaignEditorControl)
         {
             _campaignEditorControl = campaignEditorControl;
@@ -430,10 +564,10 @@ namespace RpgBaseEditor
             public void Execute(object? parameter)
             {
                 var campManager = (CampaignEditorMapManager)parameter;
-
+                
                 var mapList = campManager.MapGrid.Children.OrderBy(x => Grid.GetRow((Panel)x)).Select(x => x.Name);
 
-                var mapListJson = JsonSerializer.Serialize(mapList);       
+                var mapListJson = JsonSerializer.Serialize(mapList, new JsonSerializerOptions() {WriteIndented=true});       
                 File.WriteAllText("Campaigns/"+campManager._campaignEditorControl.UserControl.GetCampaignName()+"/maps.json", mapListJson);
                 campManager._capBuilder.AddAsset("Campaigns/"+campManager._campaignEditorControl.UserControl.GetCampaignName()+"/maps.json", AssetType.META);
 
@@ -537,6 +671,10 @@ namespace RpgBaseEditor
                 var campaignFolder = "Campaigns/"+(parameter as CampaignEditorMapManager)._campaignEditorControl.UserControl.GetCampaignName()+"/";
                 var newMapPath = Path.GetFullPath(campaignFolder+"Maps/"+MapPath.Split(Path.AltDirectorySeparatorChar, Path.DirectorySeparatorChar).LastOrDefault(), 
                                         Directory.GetCurrentDirectory());
+                
+                (parameter as CampaignEditorMapManager)._campaignEditorControl.TileEditMapManager.TypeLabel.Content = "";
+                (parameter as CampaignEditorMapManager)._campaignEditorControl.EditorDataContext.TileViewerPanel.SelectedTile = ("", 0, new Rect());
+                (parameter as CampaignEditorMapManager)._campaignEditorControl.InvalidateTileEditVisual();
 
                 (parameter as CampaignEditorMapManager)._campaignEditorControl.EditorDataContext.TileViewerPanel.CampaignFolder = campaignFolder;
                 (parameter as CampaignEditorMapManager)._campaignEditorControl.EditorDataContext.TileViewerPanel.GetTiledMap(newMapPath);
@@ -545,6 +683,10 @@ namespace RpgBaseEditor
 
         public void LoadMaps(string[] paths)
         {
+            _capBuilder = new CapBuilder(false); 
+            _capBuilder.ImportPath(Path.GetFullPath("Campaigns/"+_campaignEditorControl.UserControl.GetCampaignName(), 
+                                        Directory.GetCurrentDirectory()));
+
             foreach (var path in paths)
             {
                 SetRowOnGrid(path);
@@ -587,4 +729,113 @@ namespace RpgBaseEditor
             }
         }
     }  
+
+    public class TileEditMapManager : DockPanel
+    {
+        private TileViewer? _tileViewerPanel;
+        private CampaignEditorMapManager? _campaignEditor;
+
+        public Label TypeLabel;
+        public Label DestLabel;
+        public Label DoorIdLabel;
+
+        public Label SelectDoorLabel;
+        public ListBox DoorIdListBox;
+
+        public ListBox ListBox;
+
+        private string _selectedMap = string.Empty;
+        public TileEditMapManager(TileViewer? tileViewerPanel, CampaignEditorMapManager? campaignEditor)
+        {
+            _tileViewerPanel = tileViewerPanel;
+            _campaignEditor = campaignEditor;
+            
+            TypeLabel = new Label() { Content = ""};
+            DestLabel = new Label() { Content = ""};
+            DoorIdLabel = new Label() { Content = ""};
+            SelectDoorLabel = new Label() {Content = ""};
+
+            DoorIdListBox = new ListBox() {SelectionMode = SelectionMode.Single, MaxHeight = 165};
+            ListBox = new ListBox() {SelectionMode = SelectionMode.Single, MaxHeight = 165};
+            
+            var itemList = new List<string>();
+
+            foreach (var map in _campaignEditor.MapGrid.Children)
+            {
+                itemList.Add(map.Name);
+            }
+
+            DoorIdListBox.SelectionChanged += OnDoorIdSelectionChange;
+            ListBox.SelectionChanged += OnSelectionChange;
+
+            ListBox.Items = itemList;
+            
+            SetDock(TypeLabel, Dock.Top);
+            SetDock(DoorIdLabel, Dock.Top);
+
+            SetDock(DestLabel, Dock.Top);
+            SetDock(ListBox, Dock.Top);
+
+            SetDock(SelectDoorLabel, Dock.Top);
+            SetDock(DoorIdListBox, Dock.Top);
+
+            this.Children.Add(TypeLabel);
+            this.Children.Add(new Separator());
+            this.Children.Add(DoorIdLabel);
+            this.Children.Add(DestLabel);
+            this.Children.Add(ListBox);
+            this.Children.Add(new Separator());
+            this.Children.Add(SelectDoorLabel);
+            this.Children.Add(DoorIdListBox);
+        }
+
+        private void OnDoorIdSelectionChange(object? sender, SelectionChangedEventArgs e)
+        {
+            if (sender != null &&
+                !string.IsNullOrEmpty((sender as ListBox).SelectedItem?.ToString()))
+            {
+                if (string.IsNullOrEmpty(_selectedMap) || _selectedMap == _tileViewerPanel.LastMapSelected)
+                    return;
+
+                var tiledMap = _tileViewerPanel.GetTiledMapOnly(_tileViewerPanel.LastMapSelected);
+                
+                foreach (var layer in tiledMap.layers)
+                {
+                    if (layer.data != null)
+                        continue;
+
+                    if (layer.objects == null || layer.objects.Count() == 0)
+                        continue;
+                    
+                    foreach (var obj in layer.objects)
+                    {
+                        if (obj.id != _tileViewerPanel.SelectedTile.Id)
+                            continue;
+
+                        obj.type += ":"+_selectedMap.Split(Path.AltDirectorySeparatorChar, Path.DirectorySeparatorChar).LastOrDefault()+":"+(sender as ListBox).SelectedItem.ToString();
+                    }
+                }
+
+                _tileViewerPanel.UpdateTiledMap(_tileViewerPanel.LastMapSelected, tiledMap);
+            }
+
+        }
+
+        private void OnSelectionChange(object? sender, SelectionChangedEventArgs e)
+        {
+            if (sender != null &&
+                !string.IsNullOrEmpty((sender as ListBox).SelectedItem?.ToString()))
+            {
+                SelectDoorLabel.Content = "Door Id Destination: ";
+                DoorIdListBox.Items = _tileViewerPanel.GetDoorIds((sender as ListBox).SelectedItem.ToString());
+                _selectedMap = (sender as ListBox).SelectedItem.ToString();
+            }
+            else
+            {
+                SelectDoorLabel.Content = "";
+                DoorIdListBox.Items = new List<string>(); 
+                _selectedMap = string.Empty;
+            }
+        }
+    }
 }

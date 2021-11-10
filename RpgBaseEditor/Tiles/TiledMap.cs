@@ -38,11 +38,26 @@ namespace RpgBaseEditor.Tiles
         public int width { get; set; }
         public int x { get; set; }
         public int y { get; set; }
+        public string draworder { get; set; }
+        public List<TileObject> objects { get; set; }
     }
 
     public class Tileset
     {
         public int firstgid { get; set; }
         public string source { get; set; }
+    }
+
+     public class TileObject
+    {
+        public double height { get; set; }
+        public uint id { get; set; }
+        public string name { get; set; }
+        public int rotation { get; set; }
+        public string type { get; set; }
+        public bool visible { get; set; }
+        public double width { get; set; }
+        public double x { get; set; }
+        public double y { get; set; }
     }
 }
